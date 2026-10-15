@@ -1,0 +1,20 @@
+# Motor de video MPV (supera el limite de 100MB permitido por GitHub)
+sistema/mpv.exe
+mpv.exe
+*.7z
+*.zip
+
+# Archivos de video pesados
+WallpapersGuardados/*.mp4
+WallpapersGuardados/*.mkv
+WallpapersGuardados/*.avi
+WallpapersGuardados/*.webm
+!WallpapersGuardados/.gitkeep
+
+# Registros y temporales
+debug_log.txt
+*.log
+
+# Configuracion de IDEs
+.vs/
+.vscode/
