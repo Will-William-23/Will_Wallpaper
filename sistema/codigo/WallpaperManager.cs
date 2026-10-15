@@ -143,8 +143,16 @@ namespace WillWallpaper
                             string safeFolder = Path.Combine(exeDir, "WallpapersGuardados");
                             if (Directory.Exists(safeFolder))
                             {
-                                string[] files = Directory.GetFiles(safeFolder, "*.mp4");
-                                if (files.Length > 0) targetVideo = files[0];
+                                string[] validExts = new string[] { ".mp4", ".mkv", ".avi", ".webm", ".gif", ".wmv", ".mov" };
+                                foreach (string f in Directory.GetFiles(safeFolder))
+                                {
+                                    string ext = Path.GetExtension(f).ToLowerInvariant();
+                                    if (Array.IndexOf(validExts, ext) >= 0)
+                                    {
+                                        targetVideo = f;
+                                        break;
+                                    }
+                                }
                             }
                         }
                     }
@@ -165,7 +173,7 @@ namespace WillWallpaper
 
                 Process mpvProcess = new Process();
                 mpvProcess.StartInfo.FileName = mpvPath;
-                mpvProcess.StartInfo.Arguments = string.Format("--wid={0} --loop=inf --no-border --mute=yes --hwdec=auto --profile=fast --media-controls=no \"{1}\"", parent.ToInt32(), targetVideo);
+                mpvProcess.StartInfo.Arguments = string.Format("--wid={0} --loop=inf --no-border --mute=yes --hwdec=auto --profile=fast --media-controls=no \"{1}\"", parent.ToInt64(), targetVideo);
                 mpvProcess.StartInfo.UseShellExecute = false;
                 mpvProcess.StartInfo.CreateNoWindow = true;
                 mpvProcess.Start();
