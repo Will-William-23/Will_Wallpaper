@@ -15,6 +15,7 @@ namespace WillWallpaper
 {
     public class ConfigForm : Form
     {
+        private Button btnStart;
         private Button btnVideo;
         private Button btnStop;
         private CheckBox chkStartup;
@@ -162,11 +163,23 @@ namespace WillWallpaper
             lblPreview.TextAlign = ContentAlignment.MiddleCenter;
             previewPanel.Controls.Add(lblPreview);
 
+            btnStart = new Button();
+            btnStart.Text = "▶ INICIAR ESTE FONDO";
+            btnStart.Font = new Font("Segoe UI", 12, FontStyle.Bold);
+            btnStart.Location = new Point(480, 140);
+            btnStart.Size = new Size(300, 58);
+            btnStart.Cursor = Cursors.Hand;
+            btnStart.FlatStyle = FlatStyle.Flat;
+            btnStart.FlatAppearance.BorderSize = 0;
+            btnStart.BackColor = System.Drawing.Color.FromArgb(39, 174, 96);
+            btnStart.ForeColor = System.Drawing.Color.White;
+            btnStart.Click += BtnStart_Click;
+
             btnVideo = new Button();
-            btnVideo.Text = "AGREGAR FONDO (VIDEO / GIF)";
-            btnVideo.Font = new Font("Segoe UI", 12, FontStyle.Bold);
-            btnVideo.Location = new Point(480, 140);
-            btnVideo.Size = new Size(300, 90); // Botón más grande
+            btnVideo.Text = "CAMBIAR / AGREGAR VIDEO";
+            btnVideo.Font = new Font("Segoe UI", 11, FontStyle.Bold);
+            btnVideo.Location = new Point(480, 210);
+            btnVideo.Size = new Size(300, 58);
             btnVideo.Cursor = Cursors.Hand;
             btnVideo.FlatStyle = FlatStyle.Flat;
             btnVideo.FlatAppearance.BorderSize = 0;
@@ -175,10 +188,10 @@ namespace WillWallpaper
             btnVideo.Click += BtnVideo_Click;
 
             btnStop = new Button();
-            btnStop.Text = "DETENER FONDO";
-            btnStop.Font = new Font("Segoe UI", 12, FontStyle.Bold);
-            btnStop.Location = new Point(480, 250);
-            btnStop.Size = new Size(300, 90);
+            btnStop.Text = "■ DETENER FONDO";
+            btnStop.Font = new Font("Segoe UI", 11, FontStyle.Bold);
+            btnStop.Location = new Point(480, 280);
+            btnStop.Size = new Size(300, 58);
             btnStop.Cursor = Cursors.Hand;
             btnStop.FlatStyle = FlatStyle.Flat;
             btnStop.FlatAppearance.BorderSize = 0;
@@ -222,6 +235,7 @@ namespace WillWallpaper
             this.Controls.Add(topPanel);
             this.Controls.Add(lblTitle);
             this.Controls.Add(previewPanel);
+            this.Controls.Add(btnStart);
             this.Controls.Add(btnVideo);
             this.Controls.Add(btnStop);
             this.Controls.Add(detailsPanel);
@@ -365,6 +379,12 @@ namespace WillWallpaper
             btnStop.Enabled = isRunning;
             btnStop.BackColor = isRunning ? System.Drawing.Color.FromArgb(192, 57, 43) : System.Drawing.Color.FromArgb(80, 80, 80);
 
+            if (btnStart != null)
+            {
+                btnStart.Enabled = !isRunning;
+                btnStart.BackColor = !isRunning ? System.Drawing.Color.FromArgb(39, 174, 96) : System.Drawing.Color.FromArgb(80, 80, 80);
+            }
+
             if (!isRunning)
             {
                 if (!lblDetails.Text.Contains("Archivo activo"))
@@ -372,6 +392,65 @@ namespace WillWallpaper
                     lblDetails.Text = "Ningún fondo activo.\n\nMemoria RAM consumida: 0 MB";
                 }
             }
+        }
+
+        private void BtnStart_Click(object sender, EventArgs e)
+        {
+            string baseDir = Path.GetDirectoryName(Process.GetCurrentProcess().MainModule.FileName);
+            string mpvPath = Path.Combine(baseDir, "sistema", "mpv.exe");
+            if (!File.Exists(mpvPath)) mpvPath = Path.Combine(baseDir, "mpv.exe");
+
+            if (!File.Exists(mpvPath))
+            {
+                MessageBox.Show(
+                    "No se encontró el motor 'mpv.exe' dentro de la carpeta 'sistema'.\n\nAsegúrate de copiar el archivo 'mpv.exe' dentro de la carpeta 'sistema'.",
+                    "Motor no encontrado",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning
+                );
+                return;
+            }
+
+            string target = currentPreviewPath;
+            if (string.IsNullOrEmpty(target) || !File.Exists(target))
+            {
+                string configFile = GetConfigFilePath();
+                if (File.Exists(configFile)) target = ResolveWallpaperPath(File.ReadAllText(configFile).Trim());
+            }
+
+            if (string.IsNullOrEmpty(target) || !File.Exists(target))
+            {
+                string safeFolder = Path.Combine(baseDir, "WallpapersGuardados");
+                if (Directory.Exists(safeFolder))
+                {
+                    foreach (string f in Directory.GetFiles(safeFolder))
+                    {
+                        if (IsValidVideoFile(f))
+                        {
+                            target = f;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (string.IsNullOrEmpty(target) || !File.Exists(target))
+            {
+                MessageBox.Show("No se encontró ningún video para iniciar.\n\nPor favor usa el botón 'CAMBIAR / AGREGAR VIDEO'.", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            WallpaperManager.StopCurrentWallpaper();
+
+            string exePath = Process.GetCurrentProcess().MainModule.FileName;
+            Process.Start(exePath, string.Format("--play \"{0}\"", target));
+
+            if (chkStartup.Checked)
+            {
+                SetStartup(true, target);
+            }
+
+            UpdateStopButtonState();
         }
 
         private void BtnVideo_Click(object sender, EventArgs e)

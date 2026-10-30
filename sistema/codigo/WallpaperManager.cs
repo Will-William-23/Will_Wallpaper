@@ -176,7 +176,19 @@ namespace WillWallpaper
                 mpvProcess.StartInfo.Arguments = string.Format("--wid={0} --loop=inf --no-border --mute=yes --hwdec=auto --profile=fast --media-controls=no \"{1}\"", parent.ToInt64(), targetVideo);
                 mpvProcess.StartInfo.UseShellExecute = false;
                 mpvProcess.StartInfo.CreateNoWindow = true;
+                mpvProcess.StartInfo.RedirectStandardError = true;
                 mpvProcess.Start();
+
+                bool exitedQuickly = mpvProcess.WaitForExit(2000);
+                if (exitedQuickly && mpvProcess.ExitCode != 0)
+                {
+                    string err = mpvProcess.StandardError.ReadToEnd();
+                    string logFile = Path.Combine(exeDir, "sistema", "error.log");
+                    try { File.WriteAllText(logFile, err); } catch { }
+                    MessageBox.Show("Error al reproducir fondo con mpv:\n\n" + (string.IsNullOrEmpty(err) ? "Código de salida: " + mpvProcess.ExitCode : err), "Will Wallpaper - Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
                 mpvProcess.WaitForExit();
             }
             catch
