@@ -32,6 +32,12 @@ namespace WillWallpaper
         public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
 
         [DllImport("user32.dll", SetLastError = true)]
+        public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        public static extern bool IsWindowVisible(IntPtr hWnd);
+
+        [DllImport("user32.dll", SetLastError = true)]
         public static extern bool GetClientRect(IntPtr hWnd, out RECT lpRect);
 
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
@@ -51,14 +57,15 @@ namespace WillWallpaper
         public static IntPtr GetWallpaperParent()
         {
             IntPtr progman = FindWindow("Progman", null);
-
             IntPtr result = IntPtr.Zero;
-            // Forzar la creación de WorkerW detrás de los iconos
+
+            // Enviar mensajes para forzar separación de capas (Windows 10 y Windows 11)
+            SendMessageTimeout(progman, 0x052C, new IntPtr(0x0000000D), new IntPtr(1), 0x0, 1000, out result);
             SendMessageTimeout(progman, 0x052C, new IntPtr(0), IntPtr.Zero, 0x0, 1000, out result);
 
             IntPtr workerw = IntPtr.Zero;
 
-            // Buscar el WorkerW hermano de SHELLDLL_DefView (Típico Windows 10/11)
+            // Buscar el WorkerW hermano detrás de SHELLDLL_DefView
             EnumWindows(new EnumWindowsProc((tophandle, topparamhandle) =>
             {
                 IntPtr shellView = FindWindowEx(tophandle, IntPtr.Zero, "SHELLDLL_DefView", null);
@@ -69,25 +76,8 @@ namespace WillWallpaper
                 return true;
             }), IntPtr.Zero);
 
-            // Si falla, probar el truco de Windows 11 para separar el escritorio
-            if (workerw == IntPtr.Zero)
-            {
-                SendMessageTimeout(progman, 0x052C, new IntPtr(0x0000000D), new IntPtr(0), 0x0, 1000, out result);
-                SendMessageTimeout(progman, 0x052C, new IntPtr(0x0000000D), new IntPtr(1), 0x0, 1000, out result);
-
-                EnumWindows(new EnumWindowsProc((tophandle, topparamhandle) =>
-                {
-                    IntPtr shellView = FindWindowEx(tophandle, IntPtr.Zero, "SHELLDLL_DefView", null);
-                    if (shellView != IntPtr.Zero)
-                    {
-                        workerw = FindWindowEx(IntPtr.Zero, tophandle, "WorkerW", null);
-                    }
-                    return true;
-                }), IntPtr.Zero);
-            }
-
-            // Fallback: Buscar cualquier WorkerW visible sin hijos
-            if (workerw == IntPtr.Zero)
+            // Si no se encontró o no es visible, buscar el WorkerW con dimensiones reales de pantalla
+            if (workerw == IntPtr.Zero || !IsWindowVisible(workerw))
             {
                 EnumWindows(new EnumWindowsProc((tophandle, topparamhandle) =>
                 {
@@ -98,15 +88,29 @@ namespace WillWallpaper
                         IntPtr shellView = FindWindowEx(tophandle, IntPtr.Zero, "SHELLDLL_DefView", null);
                         if (shellView == IntPtr.Zero)
                         {
-                            workerw = tophandle;
-                            return false;
+                            RECT rc;
+                            if (GetClientRect(tophandle, out rc) && (rc.Right - rc.Left) > 300 && (rc.Bottom - rc.Top) > 300)
+                            {
+                                workerw = tophandle;
+                                return false;
+                            }
                         }
                     }
                     return true;
                 }), IntPtr.Zero);
             }
 
-            return (workerw != IntPtr.Zero) ? workerw : progman;
+            IntPtr target = (workerw != IntPtr.Zero) ? workerw : progman;
+            if (target != IntPtr.Zero)
+            {
+                try
+                {
+                    ShowWindow(target, 5); // SW_SHOW: forzar visibilidad de la capa
+                }
+                catch { }
+            }
+
+            return target;
         }
 
         public static void RunBackgroundWallpaper(string videoPath)
@@ -173,10 +177,17 @@ namespace WillWallpaper
 
                 Process mpvProcess = new Process();
                 mpvProcess.StartInfo.FileName = mpvPath;
-                mpvProcess.StartInfo.Arguments = string.Format("--wid={0} --loop=inf --no-border --mute=yes --hwdec=auto --profile=fast --media-controls=no \"{1}\"", parent.ToInt64(), targetVideo);
+                mpvProcess.StartInfo.Arguments = string.Format("--wid={0} --loop=inf --no-border --mute=yes --hwdec=auto-safe --vo=gpu --gpu-context=auto --force-window=yes --media-controls=no \"{1}\"", parent.ToInt64(), targetVideo);
                 mpvProcess.StartInfo.UseShellExecute = false;
                 mpvProcess.StartInfo.CreateNoWindow = true;
                 mpvProcess.StartInfo.RedirectStandardError = true;
+
+                string debugFile = Path.Combine(exeDir, "sistema", "debug.log");
+                try {
+                    File.WriteAllText(debugFile, string.Format("Fecha: {0}\nParent HWND: {1} (0x{1:X})\nVideo: {2}\nMPV: {3}\nArgs: {4}\n",
+                        DateTime.Now, parent.ToInt64(), targetVideo, mpvPath, mpvProcess.StartInfo.Arguments));
+                } catch { }
+
                 mpvProcess.Start();
 
                 bool exitedQuickly = mpvProcess.WaitForExit(2000);
