@@ -11,6 +11,10 @@ WallpapersGuardados/*.avi
 WallpapersGuardados/*.webm
 !WallpapersGuardados/.gitkeep
 
+# Instalador generado
+Instalador/
+*.exe_setup
+
 # Registros y temporales
 debug_log.txt
 *.log
