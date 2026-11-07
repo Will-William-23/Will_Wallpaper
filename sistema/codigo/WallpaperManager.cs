@@ -63,6 +63,7 @@ namespace WillWallpaper
             SendMessageTimeout(progman, 0x052C, IntPtr.Zero, IntPtr.Zero, 0x0, 1000, out result);
 
             IntPtr workerw = IntPtr.Zero;
+            IntPtr iconHolder = IntPtr.Zero;
 
             // 2. Buscar el WorkerW hermano detrás de SHELLDLL_DefView (Método estándar Windows 10 y 11)
             EnumWindows(new EnumWindowsProc((tophandle, topparamhandle) =>
@@ -70,6 +71,7 @@ namespace WillWallpaper
                 IntPtr shellView = FindWindowEx(tophandle, IntPtr.Zero, "SHELLDLL_DefView", null);
                 if (shellView != IntPtr.Zero)
                 {
+                    iconHolder = tophandle;
                     workerw = FindWindowEx(IntPtr.Zero, tophandle, "WorkerW", null);
                     return false; // Encontrado, no seguir enumerando
                 }
@@ -85,6 +87,7 @@ namespace WillWallpaper
                     IntPtr shellView = FindWindowEx(tophandle, IntPtr.Zero, "SHELLDLL_DefView", null);
                     if (shellView != IntPtr.Zero)
                     {
+                        iconHolder = tophandle;
                         workerw = FindWindowEx(IntPtr.Zero, tophandle, "WorkerW", null);
                         return false;
                     }
@@ -92,47 +95,25 @@ namespace WillWallpaper
                 }), IntPtr.Zero);
             }
 
-            // 4. Búsqueda por clase WorkerW sin SHELLDLL_DefView si aún es 0
-            if (workerw == IntPtr.Zero)
-            {
-                EnumWindows(new EnumWindowsProc((tophandle, topparamhandle) =>
-                {
-                    StringBuilder className = new StringBuilder(256);
-                    GetClassName(tophandle, className, className.Capacity);
-                    if (className.ToString() == "WorkerW")
-                    {
-                        IntPtr shellView = FindWindowEx(tophandle, IntPtr.Zero, "SHELLDLL_DefView", null);
-                        if (shellView == IntPtr.Zero)
-                        {
-                            workerw = tophandle;
-                            return false;
-                        }
-                    }
-                    return true;
-                }), IntPtr.Zero);
-            }
-
-            // IMPORTANTE: Nunca descartar workerw por IsWindowVisible porque en Windows 10/11
-            // se crea oculto hasta que se fuerza su visibilidad con ShowWindow.
-            IntPtr target = (workerw != IntPtr.Zero) ? workerw : progman;
-            if (target != IntPtr.Zero)
+            // 4. Si se encontró WorkerW, asegurar que quede estrictamente DETRÁS de los iconos
+            if (workerw != IntPtr.Zero)
             {
                 try
                 {
-                    ShowWindow(target, 5); // SW_SHOW: Forzar visibilidad
-                    
-                    // Asegurar dimensiones en toda la pantalla (multimonitor y alta resolución)
-                    int screenW = SystemInformation.VirtualScreen.Width;
-                    int screenH = SystemInformation.VirtualScreen.Height;
-                    int screenX = SystemInformation.VirtualScreen.Left;
-                    int screenY = SystemInformation.VirtualScreen.Top;
-
-                    SetWindowPos(target, IntPtr.Zero, screenX, screenY, screenW, screenH, 0x0040 /* SWP_SHOWWINDOW */);
+                    if (iconHolder != IntPtr.Zero)
+                    {
+                        // Colocar WorkerW inmediatamente después (detrás) de la ventana de iconos, sin activar ni cambiar tamaño
+                        SetWindowPos(workerw, iconHolder, 0, 0, 0, 0, 0x0001 /* SWP_NOSIZE */ | 0x0002 /* SWP_NOMOVE */ | 0x0010 /* SWP_NOACTIVATE */);
+                    }
+                    // Mostrar WorkerW sin robar foco ni traerlo al frente (SW_SHOWNOACTIVATE = 4)
+                    ShowWindow(workerw, 4);
                 }
                 catch { }
+
+                return workerw;
             }
 
-            return target;
+            return progman;
         }
 
         public static void RunBackgroundWallpaper(string videoPath)
@@ -252,9 +233,7 @@ namespace WillWallpaper
             string currentExe = Path.GetFileNameWithoutExtension(Process.GetCurrentProcess().MainModule.FileName);
             int currentId = Process.GetCurrentProcess().Id;
 
-            bool killedAny = false;
-            
-            // Matar a mpv primero
+            // 1. Matar a mpv primero
             foreach (var process in Process.GetProcessesByName("mpv"))
             {
                 try { 
@@ -262,6 +241,7 @@ namespace WillWallpaper
                 } catch { }
             }
 
+            // 2. Matar otras instancias secundarias de Will Wallpaper
             foreach (var process in Process.GetProcessesByName(currentExe))
             {
                 if (process.Id != currentId)
@@ -269,23 +249,35 @@ namespace WillWallpaper
                     try { 
                         process.Kill();
                         process.WaitForExit(1000); 
-                        killedAny = true;
                     } catch { }
                 }
             }
 
-            if (killedAny)
+            // 3. OCULTAR la capa WorkerW para devolver el fondo estático original y no dejar pantalla blanca
+            EnumWindows(new EnumWindowsProc((tophandle, topparamhandle) =>
             {
-                try {
-                    RegistryKey rk = Registry.CurrentUser.OpenSubKey(@"Control Panel\Desktop", false);
-                    if (rk != null) {
-                        string wall = rk.GetValue("Wallpaper") as string;
-                        if (!string.IsNullOrEmpty(wall)) {
-                            SystemParametersInfo(20, 0, wall, 0x2);
-                        }
+                IntPtr shellView = FindWindowEx(tophandle, IntPtr.Zero, "SHELLDLL_DefView", null);
+                if (shellView != IntPtr.Zero)
+                {
+                    IntPtr workerw = FindWindowEx(IntPtr.Zero, tophandle, "WorkerW", null);
+                    if (workerw != IntPtr.Zero)
+                    {
+                        ShowWindow(workerw, 0 /* SW_HIDE */);
                     }
-                } catch {}
-            }
+                }
+                return true;
+            }), IntPtr.Zero);
+
+            // 4. Forzar a Windows Explorer a repintar el fondo de pantalla estático original
+            try {
+                RegistryKey rk = Registry.CurrentUser.OpenSubKey(@"Control Panel\Desktop", false);
+                if (rk != null) {
+                    string wall = rk.GetValue("Wallpaper") as string;
+                    if (!string.IsNullOrEmpty(wall)) {
+                        SystemParametersInfo(20, 0, wall, 0x2);
+                    }
+                }
+            } catch {}
         }
     }
 }
