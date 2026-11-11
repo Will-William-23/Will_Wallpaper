@@ -258,24 +258,32 @@ namespace WillWallpaper
         private string ResolveWallpaperPath(string saved)
         {
             if (string.IsNullOrWhiteSpace(saved)) return null;
-            string baseDir = Path.GetDirectoryName(Process.GetCurrentProcess().MainModule.FileName);
-            string candidate = Path.IsPathRooted(saved) ? saved : Path.Combine(baseDir, saved);
+            string dataDir = WallpaperManager.GetWritableDataDir();
+            string exeDir = WallpaperManager.GetExeDir();
+            string candidate = Path.IsPathRooted(saved) ? saved : Path.Combine(dataDir, saved);
+            if (!File.Exists(candidate) || !IsValidVideoFile(candidate))
+            {
+                string inExe = Path.IsPathRooted(saved) ? saved : Path.Combine(exeDir, saved);
+                if (File.Exists(inExe) && IsValidVideoFile(inExe)) candidate = inExe;
+            }
             if (!File.Exists(candidate) || !IsValidVideoFile(candidate))
             {
                 string fname = Path.GetFileName(saved);
-                string fallback = Path.Combine(baseDir, "WallpapersGuardados", fname);
-                if (File.Exists(fallback) && IsValidVideoFile(fallback)) candidate = fallback;
+                string fallbackData = Path.Combine(dataDir, "WallpapersGuardados", fname);
+                string fallbackExe = Path.Combine(exeDir, "WallpapersGuardados", fname);
+                if (File.Exists(fallbackData) && IsValidVideoFile(fallbackData)) candidate = fallbackData;
+                else if (File.Exists(fallbackExe) && IsValidVideoFile(fallbackExe)) candidate = fallbackExe;
             }
             return (File.Exists(candidate) && IsValidVideoFile(candidate)) ? candidate : null;
         }
 
         private string GetConfigFilePath()
         {
-            string baseDir = Path.GetDirectoryName(Process.GetCurrentProcess().MainModule.FileName);
-            string sysDir = Path.Combine(baseDir, "sistema");
+            string dataDir = WallpaperManager.GetWritableDataDir();
+            string sysDir = Path.Combine(dataDir, "sistema");
             if (!Directory.Exists(sysDir)) Directory.CreateDirectory(sysDir);
             string sysConfig = Path.Combine(sysDir, "active_wallpaper.txt");
-            string rootConfig = Path.Combine(baseDir, "active_wallpaper.txt");
+            string rootConfig = Path.Combine(dataDir, "active_wallpaper.txt");
             if (!File.Exists(sysConfig) && File.Exists(rootConfig))
             {
                 return rootConfig;
@@ -283,11 +291,45 @@ namespace WillWallpaper
             return sysConfig;
         }
 
+        private string FindFirstSavedVideo()
+        {
+            string[] folders = new string[] {
+                Path.Combine(WallpaperManager.GetWritableDataDir(), "WallpapersGuardados"),
+                Path.Combine(WallpaperManager.GetExeDir(), "WallpapersGuardados")
+            };
+            foreach (string safeFolder in folders)
+            {
+                if (!Directory.Exists(safeFolder)) continue;
+                foreach (string f in Directory.GetFiles(safeFolder))
+                {
+                    if (IsValidVideoFile(f)) return f;
+                }
+            }
+            return null;
+        }
+
+        private bool EnsureMpvAvailable()
+        {
+            string exeDir = WallpaperManager.GetExeDir();
+            string mpvPath = Path.Combine(exeDir, "sistema", "mpv.exe");
+            if (!File.Exists(mpvPath)) mpvPath = Path.Combine(exeDir, "mpv.exe");
+            if (!File.Exists(mpvPath))
+            {
+                MessageBox.Show(
+                    "No se encontró el motor de video 'mpv.exe' dentro de la carpeta 'sistema'.\n\nReinstala la aplicación o copia 'mpv.exe' en la carpeta 'sistema'.",
+                    "Motor no encontrado",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning
+                );
+                return false;
+            }
+            return true;
+        }
+
         private void LoadInitialWallpaper()
         {
             try
             {
-                string baseDir = Path.GetDirectoryName(Process.GetCurrentProcess().MainModule.FileName);
                 string configFile = GetConfigFilePath();
                 string activeFile = null;
 
@@ -299,18 +341,7 @@ namespace WillWallpaper
 
                 if (string.IsNullOrEmpty(activeFile))
                 {
-                    string safeFolder = Path.Combine(baseDir, "WallpapersGuardados");
-                    if (Directory.Exists(safeFolder))
-                    {
-                        foreach (string f in Directory.GetFiles(safeFolder))
-                        {
-                            if (IsValidVideoFile(f))
-                            {
-                                activeFile = f;
-                                break;
-                            }
-                        }
-                    }
+                    activeFile = FindFirstSavedVideo();
                 }
 
                 if (!string.IsNullOrEmpty(activeFile) && File.Exists(activeFile))
@@ -396,20 +427,7 @@ namespace WillWallpaper
 
         private void BtnStart_Click(object sender, EventArgs e)
         {
-            string baseDir = Path.GetDirectoryName(Process.GetCurrentProcess().MainModule.FileName);
-            string mpvPath = Path.Combine(baseDir, "sistema", "mpv.exe");
-            if (!File.Exists(mpvPath)) mpvPath = Path.Combine(baseDir, "mpv.exe");
-
-            if (!File.Exists(mpvPath))
-            {
-                MessageBox.Show(
-                    "No se encontró el motor 'mpv.exe' dentro de la carpeta 'sistema'.\n\nAsegúrate de copiar el archivo 'mpv.exe' dentro de la carpeta 'sistema'.",
-                    "Motor no encontrado",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning
-                );
-                return;
-            }
+            if (!EnsureMpvAvailable()) return;
 
             string target = currentPreviewPath;
             if (string.IsNullOrEmpty(target) || !File.Exists(target))
@@ -420,18 +438,7 @@ namespace WillWallpaper
 
             if (string.IsNullOrEmpty(target) || !File.Exists(target))
             {
-                string safeFolder = Path.Combine(baseDir, "WallpapersGuardados");
-                if (Directory.Exists(safeFolder))
-                {
-                    foreach (string f in Directory.GetFiles(safeFolder))
-                    {
-                        if (IsValidVideoFile(f))
-                        {
-                            target = f;
-                            break;
-                        }
-                    }
-                }
+                target = FindFirstSavedVideo();
             }
 
             if (string.IsNullOrEmpty(target) || !File.Exists(target))
@@ -441,6 +448,7 @@ namespace WillWallpaper
             }
 
             WallpaperManager.StopCurrentWallpaper();
+            SetPreviewVideo(target);
 
             string exePath = Process.GetCurrentProcess().MainModule.FileName;
             Process.Start(exePath, string.Format("--play \"{0}\"", target));
@@ -455,20 +463,7 @@ namespace WillWallpaper
 
         private void BtnVideo_Click(object sender, EventArgs e)
         {
-            string baseDir = Path.GetDirectoryName(Process.GetCurrentProcess().MainModule.FileName);
-            string mpvPath = Path.Combine(baseDir, "sistema", "mpv.exe");
-            if (!File.Exists(mpvPath)) mpvPath = Path.Combine(baseDir, "mpv.exe");
-
-            if (!File.Exists(mpvPath))
-            {
-                MessageBox.Show(
-                    "No se encontró el motor de video 'mpv.exe' dentro de la carpeta 'sistema'.\n\nPara que los fondos animados funcionen, debes tener el archivo 'mpv.exe' dentro de la carpeta 'sistema'.",
-                    "Motor de video no encontrado",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning
-                );
-                return;
-            }
+            if (!EnsureMpvAvailable()) return;
 
             OpenFileDialog ofd = new OpenFileDialog();
             ofd.Title = "Selecciona un video o GIF";
@@ -484,7 +479,8 @@ namespace WillWallpaper
 
                 WallpaperManager.StopCurrentWallpaper();
 
-                string safeFolder = Path.Combine(baseDir, "WallpapersGuardados");
+                string dataDir = WallpaperManager.GetWritableDataDir();
+                string safeFolder = Path.Combine(dataDir, "WallpapersGuardados");
                 if (!Directory.Exists(safeFolder))
                 {
                     Directory.CreateDirectory(safeFolder);
@@ -509,9 +505,9 @@ namespace WillWallpaper
                 {
                     string configFile = GetConfigFilePath();
                     string relPath = safePath;
-                    if (safePath.StartsWith(baseDir, StringComparison.OrdinalIgnoreCase))
+                    if (safePath.StartsWith(dataDir, StringComparison.OrdinalIgnoreCase))
                     {
-                        relPath = safePath.Substring(baseDir.Length).TrimStart('\\', '/');
+                        relPath = safePath.Substring(dataDir.Length).TrimStart('\\', '/');
                     }
                     File.WriteAllText(configFile, relPath);
                 }

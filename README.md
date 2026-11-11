@@ -1,17 +1,15 @@
 # Will Wallpaper 🚀
 
-Reproductor de fondos de pantalla animados (Live Wallpapers) para Windows, ultra liviano, eficiente y 100% portable. Desarrollado en **C# (.NET Framework)** utilizando el motor **MPV** para renderizar videos directamente detrás de los iconos del escritorio.
+Reproductor de fondos de pantalla animados (Live Wallpapers) para Windows 10 y Windows 11 (compatible con 24H2+), desarrollado en **C# (.NET Framework)** utilizando **MPV** dentro de una ventana contenedora detrás de los iconos del escritorio.
 
 ---
 
 ## ✨ Características
 
-* **Bajo Consumo de Recursos:** Consume mínima memoria RAM y aprovecha aceleración por hardware (`--hwdec=auto`, `--profile=fast`).
-* **Integración Nativa con Windows:** Inyección directa en la ventana `WorkerW` / `Progman` de Windows 10 y 11.
-* **Interfaz Moderna:** Diseño oscuro con efecto translúcido, vista previa del video y controles intuitivos.
-* **Inicio Automático Optimizado:** Opción de iniciar con Windows eliminando el retraso habitual de inicio (`StartupDelayInMSec`).
-* **Sin Controles Fantasma:** Bloquea los controles multimedia en la pantalla de bloqueo (SMTC) para que no interfiera con otros reproductores.
-* **100% Portable:** Guarda rutas relativas, permitiendo mover la carpeta completa o usarla desde una memoria USB.
+* **Bajo Consumo de Recursos:** Aceleración por hardware (`--hwdec=auto-safe`, `--d3d11-flip=no`) compatible con laptops de doble tarjeta gráfica (Intel/AMD + NVIDIA).
+* **Compatible con Windows 10 y Windows 11 (24H2+):** Soporta tanto `WorkerW` clásico como el escritorio en capas bajo `Progman` (`WS_EX_LAYERED`).
+* **Limpieza Total al Detener:** Cierra la ventana contenedora y restaura el fondo estático de Windows al instante.
+* **Instalador Único:** Empaquetado profesional con Inno Setup (`WillWallpaper_Setup.exe`, sin incluir videos de relleno ni código fuente).
 
 ---
 
@@ -20,34 +18,40 @@ Reproductor de fondos de pantalla animados (Live Wallpapers) para Windows, ultra
 ```text
 📁 Will Wallpaper
 │
-├── 🚀 WillWallpaper.exe          # Ejecutable principal
-├── 📁 WallpapersGuardados        # Carpeta donde se guardan tus videos (.mp4)
+├── 🚀 WillWallpaper.exe          # Ejecutable para pruebas locales
+├── 📁 Instalador                 # Salida de WillWallpaper_Setup.exe
+├── 📁 WallpapersGuardados        # Carpeta de videos guardados (.mp4, etc.)
 │
 └── 📁 sistema                    # Archivos internos del sistema
-    ├── mpv.exe                   # Motor de video MPV
+    ├── mpv.exe                   # Motor de video MPV (no incluido en Git)
     ├── bg.jpg                    # Imagen de fondo de la interfaz
     ├── logo.ico                  # Icono de la aplicación
-    ├── active_wallpaper.txt      # Archivo de configuración del fondo activo
-    └── 📁 codigo                 # Código fuente del proyecto
-        ├── ConfigForm.cs
+    └── 📁 codigo                 # Código fuente y scripts
         ├── Program.cs
+        ├── ConfigForm.cs
         ├── WallpaperManager.cs
-        └── build.bat             # Script de compilación
+        ├── build.bat             # Compilación rápida para pruebas locales
+        ├── crear_instalador.bat  # Compila y genera el instalador Setup.exe
+        └── setup.iss             # Script de Inno Setup
 ```
 
 ---
 
-## 🛠️ Compilación
+## 🛠️ Comandos de Compilación (BUILD)
 
-El proyecto no requiere dependencias pesadas ni Visual Studio completo; se compila utilizando el compilador nativo de C# incluido en Windows (.NET Framework 4.0+):
+El código se compila con el compilador nativo de C# incluido en Windows (.NET Framework 4.0+):
 
-1. Abre una terminal o ejecuta directamente:
+1. **Pruebas rápidas locales (`WillWallpaper.exe`):**
    ```cmd
    sistema\codigo\build.bat
    ```
-2. El script generará automáticamente el ejecutable `WillWallpaper.exe` en la raíz del proyecto.
+2. **Construir instalador final (`Instalador\WillWallpaper_Setup.exe`):**
+   *(Requiere [Inno Setup 6](https://jrsoftware.org/isinfo.php))*
+   ```cmd
+   sistema\codigo\crear_instalador.bat
+   ```
 
-> **Nota:** Debido al límite de tamaño de archivos en GitHub (100 MB), `mpv.exe` no está incluido en este repositorio. Puedes descargar la versión de Windows de [mpv.io](https://mpv.io/) y colocar el archivo `mpv.exe` dentro de la carpeta `sistema/`.
+> **Nota:** Por límite de tamaño de GitHub (100 MB), `mpv.exe` no está incluido en este repositorio. Descarga `mpv.exe` para Windows desde [mpv.io](https://mpv.io/) y colócalo dentro de `sistema/`.
 
 ---
 

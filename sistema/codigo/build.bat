@@ -9,15 +9,19 @@ set ROOT_DIR=%SISTEMA_DIR%..\
 
 if not exist "%CSC%" (
     echo El compilador de C# no se encuentra en %CSC%
-    pause
-    exit /b
+    exit /b 1
 )
+
+taskkill /F /IM mpv.exe >nul 2>&1
+taskkill /F /IM WillWallpaper.exe >nul 2>&1
 
 echo Compilando WillWallpaper...
 "%CSC%" /target:winexe /out:"%ROOT_DIR%WillWallpaper.exe" /win32icon:"%SISTEMA_DIR%logo.ico" /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:"%WPF_DIR%\WindowsBase.dll" /r:"%WPF_DIR%\PresentationCore.dll" /r:"%WPF_DIR%\PresentationFramework.dll" /r:"C:\Windows\Microsoft.NET\Framework64\v4.0.30319\System.Xaml.dll" /r:"C:\Windows\Microsoft.NET\assembly\GAC_MSIL\WindowsFormsIntegration\v4.0_4.0.0.0__31bf3856ad364e35\WindowsFormsIntegration.dll" "%SCRIPT_DIR%Program.cs" "%SCRIPT_DIR%WallpaperManager.cs" "%SCRIPT_DIR%ConfigForm.cs"
 
 if %ERRORLEVEL% equ 0 (
     echo Compilacion exitosa: %ROOT_DIR%WillWallpaper.exe
+    exit /b 0
 ) else (
     echo Error al compilar.
+    exit /b 1
 )
